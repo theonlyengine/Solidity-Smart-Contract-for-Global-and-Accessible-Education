@@ -1,0 +1,85 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+contract GlobalEducation is Ownable {
+    IERC20 public maartionToken;
+
+    struct Resource {
+        uint256 id;
+        string title;
+        string ipfsHash;
+        address uploader;
+    }
+
+    struct Scholarship {
+        uint256 id;
+        address recipient;
+        uint256 amount;
+        bool claimed;
+    }
+
+    uint256 public nextResourceId;
+    uint256 public nextScholarshipId;
+    mapping(uint256 => Resource) public resources;
+    mapping(uint256 => Scholarship) public scholarships;
+
+    event ResourceUploaded(uint256 resourceId, string title, string ipfsHash, address uploader);
+    event ScholarshipCreated(uint256 scholarshipId, address recipient, uint256 amount);
+    event ScholarshipClaimed(uint256 scholarshipId, address recipient, uint256 amount);
+
+    constructor(address _maartionToken) {
+        maartionToken = IERC20(_maartionToken);
+    }
+
+    function uploadResource(string memory _title, string memory _ipfsHash) public {
+        uint256 resourceId = nextResourceId;
+        resources[resourceId] = Resource({
+            id: resourceId,
+            title: _title,
+            ipfsHash: _ipfsHash,
+            uploader: msg.sender
+        });
+
+        emit ResourceUploaded(resourceId, _title, _ipfsHash, msg.sender);
+
+        nextResourceId++;
+    }
+
+    function createScholarship(address _recipient, uint256 _amount) public onlyOwner {
+        uint256 scholarshipId = nextScholarshipId;
+        scholarships[scholarshipId] = Scholarship({
+            id: scholarshipId,
+            recipient: _recipient,
+            amount: _amount,
+            claimed: false
+        });
+
+        emit ScholarshipCreated(scholarshipId, _recipient, _amount);
+
+        nextScholarshipId++;
+    }
+
+    function claimScholarship(uint256 _scholarshipId) public {
+        Scholarship storage scholarship = scholarships[_scholarshipId];
+        require(scholarship.recipient == msg.sender, "You are not the recipient of this scholarship");
+        require(!scholarship.claimed, "Scholarship already claimed");
+
+        scholarship.claimed = true;
+        maartionToken.transfer(scholarship.recipient, scholarship.amount);
+
+        emit ScholarshipClaimed(_scholarshipId, msg.sender, scholarship.amount);
+    }
+
+    function getResource(uint256 _resourceId) public view returns (string memory title, string memory ipfsHash, address uploader) {
+        Resource storage resource = resources[_resourceId];
+        return (resource.title, resource.ipfsHash, resource.uploader);
+    }
+
+    function getScholarship(uint256 _scholarshipId) public view returns (address recipient, uint256 amount, bool claimed) {
+        Scholarship storage scholarship = scholarships[_scholarshipId];
+        return (scholarship.recipient, scholarship.amount, scholarship.claimed);
+    }
+}
